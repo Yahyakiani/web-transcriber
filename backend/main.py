@@ -1,8 +1,7 @@
 # backend/main.py
 from fastapi import FastAPI, HTTPException, BackgroundTasks
-import uvicorn
+from fastapi.middleware.cors import CORSMiddleware # Import CORS Middleware
 import yt_dlp
-import os
 import uuid
 import shutil
 from pathlib import Path
@@ -32,6 +31,25 @@ app = FastAPI(
     version="0.1.0",
 )
 whisper_model = None
+
+# --- CORS Configuration ---
+# Define allowed origins. Be specific in production!
+# For development, allowing localhost:3000 is usually sufficient.
+# Use "*" cautiously, it allows any origin.
+origins = [
+    "http://localhost:3000", # Your frontend origin
+    # Add other origins if needed (e.g., deployed frontend URL)
+    # "http://your-deployed-frontend.com",
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins, # List of allowed origins
+    allow_credentials=True, # Allow cookies (if you use them later)
+    allow_methods=["*"],    # Allow all methods (GET, POST, OPTIONS, etc.)
+    allow_headers=["*"],    # Allow all headers
+)
+# --- End CORS Configuration ---
 
 # --- Helper Function for Cleanup ---
 def cleanup_temp_folder(folder_path: Path):
