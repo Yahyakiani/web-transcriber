@@ -4,12 +4,35 @@
 import React, { useState } from 'react';
 import TranscriptionForm from '@/app/components/TranscriptionForm';
 
+// Define specific analysis types (can be moved to a types file later)
+interface SentimentResult {
+    sentiment_label: string;
+    sentiment_score: number;
+}
+interface PosCountsResult {
+     pos_counts: { [key: string]: number }; // Example: { "NOUN": 10, "VERB": 5 }
+}
+interface WordFrequencyResult {
+    word_frequency: { [key: string]: number }; // Example: { "hello": 3, "world": 2 }
+}
+interface TopicResult {
+     topic: string;
+}
+
+interface AnalysisStructure {
+    sentiment: SentimentResult | null;
+    pos_counts: PosCountsResult | null;
+    word_frequency: WordFrequencyResult | null;
+    topic: TopicResult | null;
+}
+
+
 // Define structure for API response (matching backend's TranscriptionResponse)
 interface ApiResponse {
     message: string;
     transcription: string | null;
     srt_transcription: string | null;
-    analysis: any | null; // Replace 'any' with a proper type later if needed
+    analysis: AnalysisStructure  | null; 
     original_url: string;
     time_range: string;
     download_seconds?: number;
@@ -64,9 +87,17 @@ export default function Home() {
             console.log("API Response:", responseData);
             setResult(responseData as ApiResponse);
 
-        } catch (err: any) {
+        } catch (err: unknown) { 
             console.error("API Error:", err);
-            setError(err.message || "An error occurred while contacting the API.");
+            let errorMessage = "An error occurred while contacting the API.";
+            if (err instanceof Error) {
+                
+                errorMessage = err.message;
+            } else if (typeof err === 'string') {
+                 errorMessage = err;
+            }
+            // Potentially handle other error types if necessary
+            setError(errorMessage);
         } finally {
             setIsLoading(false);
         }

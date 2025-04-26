@@ -1,0 +1,71 @@
+# docker-compose.yml (in project root)
+version: '3.8' # Specify docker-compose version
+
+services:
+  # Backend Service (FastAPI)
+  backend:
+    container_name: transcriber-backend
+    build:
+      context: ./backend # Path to the directory containing the backend Dockerfile
+      dockerfile: Dockerfile
+    # Mount the code for development hot-reloading (using --reload in uvicorn)
+    # Comment this out for production-like testing without local code mounting
+    volumes:
+      - ./backend:/app
+      # Add volume for Whisper models cache to persist downloads between runs
+      - whisper_cache:/root/.cache/whisper
+    ports:
+      - "8000:8000" # Map host port 8000 to container port 8000
+    environment:
+      # Pass environment variables if needed (e.g., for Redis connection)
+      - REDIS_HOST=redis_service # Use the service name of the redis container
+      - REDIS_PORT=6379
+      # Ensure PYTHONUNBUFFERED and PYTHONDONTWRITEBYTECODE are set if not in Dockerfile ENV
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+    # Ensure backend starts after redis is somewhat ready (basic check)
+    depends_on:
+      redis_service:
+        condition: service_started # Waits only for container start, not service readiness
+    networks:
+      - transcriber_network
+
+  # Frontend Service (Next.js)
+  frontend:
+    container_name: transcriber-frontend
+    build:
+      context: ./frontend/web-transcriber # Path to the directory containing the frontend Dockerfile
+      dockerfile: Dockerfile
+    # No volume mount needed for frontend code in production build testing
+    # For dev hot-reloading, mount code and run `npm run dev` (different Dockerfile/CMD)
+    ports:
+      - "3000:3000" # Map host port 3000 to container port 3000
+    environment:
+      # Override the backend URL defined in the Dockerfile
+      - NEXT_PUBLIC_BACKEND_URL=http://backend:8000 # Frontend talks to backend via service name
+      - NODE_ENV=production # Ensure production mode
+    depends_on:
+      - backend # Frontend depends on backend
+    networks:
+      - transcriber_network
+
+  # Redis Service
+  redis_service: # Use a different name than the container name if desired
+    container_name: redis-cache # Can reuse the name from `docker run` if you stop/remove that one first
+    image: redis:latest # Use the official Redis image
+    ports:
+      - "6379:6379" # Map host port 6379 to container port 6379
+    volumes:
+      - redis_data:/data # Persist Redis data
+    networks:
+      - transcriber_network
+
+# Define named volumes
+volumes:
+  redis_data: # Persists data even if the redis container is removed/recreated
+  whisper_cache: # Persists downloaded Whisper models
+
+# Define network
+networks:
+  transcriber_network:
+    driver: bridge # Default Docker network driver

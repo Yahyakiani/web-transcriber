@@ -47,7 +47,9 @@ const TranscriptionForm: React.FC<TranscriptionFormProps> = ({ onSubmit, isLoadi
         // Basic URL check (browser built-in validation helps, but check non-empty)
          try {
            new URL(formData.videoUrl);
-         } catch (_) {
+         } catch (error) {
+            // Log the error to use the variable
+            console.warn("Ignoring URL validation error:", error);
            setError("Please enter a valid URL.");
            return;
          }

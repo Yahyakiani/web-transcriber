@@ -1,0 +1,19 @@
+# backend/.dockerignore
+.dockerignore
+Dockerfile
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+.git
+.gitignore
+temp_audio/
+*.wav
+*.mp3
+*.webm
+*.mp4
+*.m4a
+.pytest_cache/
+.mypy_cache/
