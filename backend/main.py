@@ -13,7 +13,7 @@ import traceback
 import redis
 import json
 from redis.exceptions import ConnectionError as RedisConnectionError
-
+import os
 from schemas import (
     TranscriptionRequest,
     TranscriptionResponse,
@@ -30,10 +30,10 @@ from utils import (
 # --- Constants ---
 TEMP_DOWNLOAD_DIR = Path("./temp_audio")
 WHISPER_MODEL_NAME = "base"
-REDIS_HOST = "localhost"
-REDIS_PORT = 6379
-REDIS_DB = 0
-CACHE_EXPIRATION_SECONDS = 3600  # 1 hour
+REDIS_HOST = os.environ.get("REDIS_HOST", "localhost")
+REDIS_PORT = int(os.environ.get("REDIS_PORT", 6379)) # Also get port from env if needed
+REDIS_DB = int(os.environ.get("REDIS_DB", 0))
+CACHE_EXPIRATION_SECONDS = int(os.environ.get("CACHE_EXPIRATION_SECONDS", 3600))
 
 # --- FastAPI App ---
 app = FastAPI(
@@ -99,22 +99,31 @@ async def startup_event():
         whisper_model = None
 
     # Connect to Redis
-    try:
-        print(f"Connecting to Redis at {REDIS_HOST}:{REDIS_PORT}...")
-        redis_client = redis.Redis(
-            host=REDIS_HOST,
-            port=REDIS_PORT,
-            db=REDIS_DB,
-            decode_responses=True
-        )
-        redis_client.ping()
-        print("Redis connection established.")
-    except RedisConnectionError as e:
-        print(f"WARNING: Redis unavailable: {e}. Caching disabled.")
-        redis_client = None
-    except Exception as e:
-        print(f"WARNING: Error connecting to Redis: {e}. Caching disabled.")
-        redis_client = None
+    max_retries = 5
+    retry_delay = 2 # seconds
+    for attempt in range(max_retries):
+        try:
+            print(f"Connecting to Redis at {REDIS_HOST}:{REDIS_PORT} (Attempt {attempt + 1}/{max_retries})...")
+            redis_client = redis.Redis(
+                host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB,
+                decode_responses=True,
+                socket_connect_timeout=3 # Add a connection timeout
+            )
+            redis_client.ping()
+            print("Successfully connected to Redis.")
+            break # Exit loop on success
+        except RedisConnectionError as e:
+            print(f"WARNING: Redis connection attempt {attempt + 1} failed: {e}")
+            if attempt + 1 == max_retries:
+                print("WARNING: Max Redis connection retries reached. Caching will be disabled.")
+                redis_client = None
+            else:
+                print(f"Retrying in {retry_delay} seconds...")
+                time.sleep(retry_delay) # Wait before retrying
+        except Exception as e:
+             print(f"WARNING: An unexpected error occurred during Redis connection: {e}. Caching disabled.")
+             redis_client = None
+             break # Don't retry on unexpected errors
 
 # --- Shutdown Event ---
 @app.on_event("shutdown")
@@ -212,7 +221,10 @@ async def create_transcription_request(
         # Download
         t0 = time.time()
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            code = ydl.download([request.video_url])
+            # Convert video_url to string explicitly
+            video_url_str = str(request.video_url)
+            print(f"Attempting download for URL: {video_url_str}") # Added log for confirmation
+            code = ydl.download([video_url_str]) # Pass the string version
             if code != 0:
                 raise HTTPException(status_code=500, detail="Download failed.")
         t1 = time.time()
@@ -262,6 +274,8 @@ async def create_transcription_request(
         # Build response
         t_end = time.time()
         total_t = t_end - t_start
+        original_url_str = str(request.video_url)
+
         response_data = {
             "message": "Processing successful.",
             "transcription": transcription_text,
@@ -275,11 +289,12 @@ async def create_transcription_request(
                     request.analyze_topic,
                 ]) else None
             ),
-            "original_url": request.video_url,
+            # Use the string version of the URL here
+            "original_url": original_url_str,
             "time_range": f"{request.start_time} - {request.end_time}",
             "download_seconds": round(download_t, 2),
             "transcription_seconds": round(transcribe_t, 2),
-            "analysis_seconds": round(analysis_t, 2),
+            "analysis_seconds": round(analysis_t, 2), # Added analysis timing to response
             "total_seconds": round(total_t, 2),
         }
 
