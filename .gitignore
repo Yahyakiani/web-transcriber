@@ -1,3 +1,4 @@
 /backend/venv
 backend/__pycache__/main.cpython-310.pyc
 backend/__pycache__/schemas.cpython-310.pyc
+backend/__pycache__/utils.cpython-310.pyc
