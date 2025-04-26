@@ -1,103 +1,141 @@
-import Image from "next/image";
+// frontend/src/app/page.tsx
+"use client"; // This page needs client-side interactivity
+
+import React, { useState } from 'react';
+import TranscriptionForm from '@/app/components/TranscriptionForm';
+
+// Define structure for API response (matching backend's TranscriptionResponse)
+interface ApiResponse {
+    message: string;
+    transcription: string | null;
+    srt_transcription: string | null;
+    analysis: any | null; // Replace 'any' with a proper type later if needed
+    original_url: string;
+    time_range: string;
+    download_seconds?: number;
+    transcription_seconds?: number;
+    total_seconds?: number;
+}
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [result, setResult] = useState<ApiResponse | null>(null);
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
-  );
+    const handleFormSubmit = async (formData: { videoUrl: string; startTime: string; endTime: string }) => {
+        setIsLoading(true);
+        setError(null);
+        setResult(null); // Clear previous results
+
+        console.log("Form submitted:", formData);
+
+        // --- API Call ---
+        try {
+            // IMPORTANT: Replace with your actual backend URL when running
+            // If backend runs on http://localhost:8000
+            const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
+            const response = await fetch(`${backendUrl}/transcribe`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json', // Explicitly accept JSON
+                },
+                body: JSON.stringify({
+                    video_url: formData.videoUrl,
+                    start_time: formData.startTime,
+                    end_time: formData.endTime,
+                    generate_srt: true, // Always request SRT for now
+                    // Add analysis flags if you want UI controls for them later
+                    analyze_sentiment: false,
+                    analyze_pos: false,
+                    analyze_word_frequency: false,
+                    analyze_topic: false,
+                }),
+            });
+
+            const responseData = await response.json();
+
+            if (!response.ok) {
+                // Try to get error detail from backend response, fallback otherwise
+                const errorDetail = responseData.detail || `Request failed with status ${response.status}`;
+                throw new Error(errorDetail);
+            }
+
+            console.log("API Response:", responseData);
+            setResult(responseData as ApiResponse);
+
+        } catch (err: any) {
+            console.error("API Error:", err);
+            setError(err.message || "An error occurred while contacting the API.");
+        } finally {
+            setIsLoading(false);
+        }
+        // --- End API Call ---
+    };
+
+    return (
+        <main className="flex min-h-screen flex-col items-center justify-start p-6 md:p-12 bg-gray-900 text-gray-100">
+            <div className="w-full max-w-2xl">
+                <h1 className="text-3xl font-bold mb-6 text-center text-white">
+                    Video Segment Transcriber
+                </h1>
+
+                <div className="bg-gray-800 p-6 rounded-lg shadow-lg mb-8">
+                    <TranscriptionForm onSubmit={handleFormSubmit} isLoading={isLoading} />
+                </div>
+
+                {/* --- Display Area --- */}
+                {/* Error Display */}
+                 {error && !isLoading && (
+                    <div className="mt-6 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
+                        <strong className="font-bold">Error: </strong>
+                        <span className="block sm:inline">{error}</span>
+                    </div>
+                )}
+
+                {/* Loading Indicator */}
+                {isLoading && (
+                    <div className="mt-6 text-center">
+                         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-400 mx-auto"></div>
+                         <p className="mt-2 text-gray-400">Processing, please wait...</p>
+                    </div>
+                )}
+
+                {/* Results Display */}
+                {result && !isLoading && (
+                    <div className="mt-6 bg-gray-800 p-6 rounded-lg shadow-lg">
+                        <h2 className="text-2xl font-semibold mb-4 text-white">Transcription Results</h2>
+                        <div className="space-y-4">
+                            <div>
+                                <h3 className="text-lg font-medium text-gray-300 mb-1">Plain Text:</h3>
+                                <pre className="bg-gray-700 p-3 rounded text-sm text-gray-200 whitespace-pre-wrap break-words">
+                                    {result.transcription || "No text transcribed."}
+                                </pre>
+                            </div>
+                            {result.srt_transcription && (
+                                 <div>
+                                    <h3 className="text-lg font-medium text-gray-300 mb-1">SRT Format:</h3>
+                                    <pre className="bg-gray-700 p-3 rounded text-sm text-gray-200 max-h-60 overflow-y-auto whitespace-pre-wrap break-words">
+                                        {result.srt_transcription}
+                                    </pre>
+                                </div>
+                            )}
+                            <div className="text-xs text-gray-400 pt-2 border-t border-gray-700 mt-4">
+                                <p>Original URL: {result.original_url}</p>
+                                <p>Time Range: {result.time_range}</p>
+                                 {result.total_seconds !== undefined && (
+                                    <p>Processing Time: {result.total_seconds.toFixed(2)}s
+                                        (Download: {result.download_seconds?.toFixed(2)}s,
+                                         Transcription: {result.transcription_seconds?.toFixed(2)}s)
+                                    </p>
+                                 )}
+                            </div>
+                        </div>
+                    </div>
+                )}
+                {/* --- End Display Area --- */}
+
+            </div>
+        </main>
+    );
 }
