@@ -2,8 +2,6 @@
 
 This project is a web application designed to transcribe specific segments of online videos (like YouTube). Users provide a video URL and a start/end time range. The backend downloads the relevant audio segment, transcribes it using OpenAI's Whisper model, and returns the transcription in both plain text and SRT format.
 
-This project also serves as a learning exercise, covering various aspects of building and deploying a production-level application, including frontend/backend development, containerization, caching, CI/CD, and cloud deployment concepts.
-
 ## Screenshot
 
 ![App Screenshot](s1.jpg)
